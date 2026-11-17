@@ -6,7 +6,7 @@ set -euo pipefail
 OUT_DIR="${1:-$HOME/hermes-bundle}"
 VERSION="${2:-local-$(date +%Y%m%d%H%M)}"
 PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
-ROOTFS="${ROOTFS:-$PREFIX/var/lib/proot-distro/containers/ubuntu/rootfs}"
+ROOTFS="${ROOTFS:-$PREFIX/var/lib/proot-distro/containers/ubuntu2404/rootfs}"
 
 require() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing: $1" >&2; exit 1; }
@@ -48,12 +48,22 @@ chmod +x "$STAGE/runtime/rootfs/usr/local/bin/hermes-start.sh"
 
 if [ ! -x "$STAGE/runtime/rootfs/usr/bin/python3" ] && [ ! -x "$STAGE/runtime/rootfs/bin/python3" ]; then
   echo "Python3 is missing in the rootfs. Install it first:" >&2
-  echo "  proot-distro login ubuntu -- apt-get update && apt-get install -y python3 python3-pip" >&2
+  echo "  proot-distro login ubuntu2404 -- apt-get update && apt-get install -y python3 python3-pip" >&2
+  exit 1
+fi
+
+# The API server silently refuses to start without aiohttp. Fail the bundle
+# build early instead of shipping a runtime whose /health never comes up.
+if ! find "$STAGE/runtime/rootfs/usr/lib/python3"* -maxdepth 3 -type d -name aiohttp 2>/dev/null | grep -q .; then
+  echo "aiohttp is missing in the rootfs. Install it first:" >&2
+  echo "  proot-distro login ubuntu2404 -- python3 -m pip install 'aiohttp==3.14.1'" >&2
   exit 1
 fi
 
 SIZE=$(du -sb "$STAGE/runtime" | cut -f1)
-tar --format=ustar --dereference -czf "$BUNDLE" -C "$STAGE" runtime
+# --dereference/--hard-dereference keep the archive to regular files and
+# directories, matching the minimal extractor in HermesTar.kt.
+tar --format=ustar --dereference --hard-dereference -czf "$BUNDLE" -C "$STAGE" runtime
 SHA=$(sha256sum "$BUNDLE" | cut -d' ' -f1)
 
 cat > "$OUT_DIR/runtime-manifest.json" <<MANIFEST

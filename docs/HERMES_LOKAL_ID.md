@@ -52,11 +52,11 @@ perangkat Termux lalu di-upload sebagai GitHub Release asset.
 
 ```bash
 pkg install -y proot-distro
-proot-distro install ubuntu
-proot-distro login ubuntu
+proot-distro install ubuntu:24.04 --name ubuntu2404
+proot-distro login ubuntu2404
   apt-get update
-  apt-get install -y python3 python3-pip nodejs npm git ripgrep ffmpeg
-  python3 -m pip install hermes-agent==0.19.0
+  apt-get install -y python3 python3-pip nodejs npm git ripgrep ffmpeg ca-certificates curl
+  python3 -m pip install hermes-agent==0.19.0 'aiohttp==3.14.1'
   exit
 
 cd ~/hermes-lokal

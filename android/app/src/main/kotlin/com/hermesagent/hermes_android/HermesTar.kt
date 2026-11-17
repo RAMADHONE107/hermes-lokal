@@ -18,7 +18,8 @@ object HermesTar {
 
     private fun extractStream(input: InputStream, destination: File, onProgress: ((Long, Long) -> Unit)?) {
         val header = ByteArray(BLOCK)
-        val root = destination.canonicalFile.toPath()
+        val root = destination.canonicalFile
+        val rootPrefix = root.absolutePath + File.separator
         var totalBytes = 0L
         while (true) {
             if (!readFully(input, header)) break
@@ -28,13 +29,15 @@ object HermesTar {
             val prefix = parseString(header, 345, 155)
             val name = if (prefix.isEmpty()) rawName else "$prefix/$rawName"
             val size = parseOctal(header, 124, 12)
+            val mode = parseOctal(header, 100, 8)
+            val executable = (mode and 0b111111111L) != 0L
             val typeFlag = header[156].toInt().toChar()
 
             if (!HermesEngine.isSafeEntry(name)) {
                 throw IllegalArgumentException("Unsafe archive entry: $name")
             }
             val target = File(destination, name).canonicalFile
-            if (!target.toPath().startsWith(root)) {
+            if (target != root && !target.absolutePath.startsWith(rootPrefix)) {
                 throw IllegalArgumentException("Archive entry escapes root: $name")
             }
 
@@ -53,10 +56,14 @@ object HermesTar {
                             onProgress?.invoke(totalBytes, -1L)
                         }
                     }
+                    if (executable) target.setExecutable(true, false)
                     val padding = (BLOCK - (size % BLOCK).toInt()) % BLOCK
                     if (padding > 0) skipExactly(input, padding.toLong())
                 }
-                '5' -> target.mkdirs()
+                '5' -> {
+                    target.mkdirs()
+                    if (executable) target.setExecutable(true, false)
+                }
                 '2' -> {
                     // The bundle builder dereferences symlinks. Ignore any that
                     // slip through rather than creating an unsafe link.

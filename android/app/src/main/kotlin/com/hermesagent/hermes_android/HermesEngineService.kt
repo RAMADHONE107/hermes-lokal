@@ -18,7 +18,7 @@ class HermesEngineService : Service() {
         const val ACTION_STOP = "com.hermesagent.hermes_android.hermes_engine.STOP"
     }
 
-    private val controller by lazy { HermesEngineController.instance() }
+    private val controller by lazy { HermesEngineController.install(application as android.app.Application) }
     private val listener: (HermesEngineController.Status) -> Unit = { status ->
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(status))
