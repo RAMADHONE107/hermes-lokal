@@ -109,7 +109,9 @@ class _LocalEngineScreenState extends State<LocalEngineScreen> {
                       children: [
                         Icon(
                           running ? Icons.cloud_done : Icons.cloud_off,
-                          color: running ? Colors.green : Colors.orange,
+                          color: running
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.outline,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
