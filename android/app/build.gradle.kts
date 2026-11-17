@@ -21,6 +21,12 @@ android {
    namespace = "com.hermesagent.hermes_android"
    compileSdk = 36
 
+   lint {
+      // Sideloaded only: Play's target-API policy does not apply, and target 28
+      // is required for the bundled proot to exec() from app-private storage.
+      disable += "ExpiredTargetSdkVersion"
+   }
+
    compileOptions {
        sourceCompatibility = JavaVersion.VERSION_17
        targetCompatibility = JavaVersion.VERSION_17
