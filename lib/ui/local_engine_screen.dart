@@ -92,7 +92,7 @@ class _LocalEngineScreenState extends State<LocalEngineScreen> {
   @override
   Widget build(BuildContext context) {
     final running = _status.state == LocalEngineState.running;
-    final busy = _busy || _status.isBusy;
+    final busy = _busy || _status.state.isBusy;
     return Scaffold(
       appBar: AppBar(title: const Text('Kelola Mesin Lokal')),
       body: SafeArea(
@@ -138,23 +138,17 @@ class _LocalEngineScreenState extends State<LocalEngineScreen> {
               runSpacing: 8,
               children: [
                 FilledButton.icon(
-                  onPressed: busy
-                      ? null
-                      : () => _run(_client.prepare),
+                  onPressed: busy ? null : () => _run(_client.prepare),
                   icon: const Icon(Icons.download),
                   label: const Text('Siapkan'),
                 ),
                 FilledButton.icon(
-                  onPressed: busy || running
-                      ? null
-                      : () => _run(_client.start),
+                  onPressed: busy || running ? null : () => _run(_client.start),
                   icon: const Icon(Icons.play_arrow),
                   label: const Text('Mulai'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: busy || !running
-                      ? null
-                      : () => _run(_client.stop),
+                  onPressed: busy || !running ? null : () => _run(_client.stop),
                   icon: const Icon(Icons.stop),
                   label: const Text('Setop'),
                 ),
@@ -187,11 +181,10 @@ class _LocalEngineScreenState extends State<LocalEngineScreen> {
                     ? null
                     : () async {
                         await Clipboard.setData(ClipboardData(text: _apiKey));
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Kunci API disalin')),
-                          );
-                        }
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Kunci API disalin')),
+                        );
                       },
               ),
             ),

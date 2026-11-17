@@ -131,8 +131,9 @@ class LocalEngineClient {
     try {
       final value = await _method.invokeMethod<T>(method, arguments);
       final result = value;
-      if (result == null)
+      if (result == null) {
         throw const LocalEngineException('Respons kosong dari mesin');
+      }
       return result;
     } on MissingPluginException {
       throw const LocalEngineException('Mesin tidak tersedia di build ini');
