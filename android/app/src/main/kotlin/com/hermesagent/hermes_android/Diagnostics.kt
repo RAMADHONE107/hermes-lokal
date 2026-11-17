@@ -16,7 +16,10 @@ import java.io.File
  * chunk, which throttled extraction to a few KB/s and made the file briefly
  * disappear (0 bytes) for readers. */
 object Diagnostics {
-    private const val NAME = "hermes-engine-debug.txt"
+    // Unique per app: the other Hermes package also writes
+    // "hermes-engine-debug.txt", and MediaStore rows are owned per package.
+    // Sharing a display name made openOutputStream hit a foreign row and fail.
+    private const val NAME = "hermes-lokal-engine-debug.txt"
 
     @Volatile
     private var cachedUri: Uri? = null
@@ -46,8 +49,8 @@ object Diagnostics {
         resolver.query(
             collection,
             arrayOf(MediaStore.Downloads._ID),
-            "${MediaStore.Downloads.DISPLAY_NAME}=?",
-            arrayOf(NAME),
+            "${MediaStore.Downloads.DISPLAY_NAME}=? AND owner_package_name=?",
+            arrayOf(NAME, context.packageName),
             null,
         )?.use { cursor ->
             if (cursor.moveToNext()) {
