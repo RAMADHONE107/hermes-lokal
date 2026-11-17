@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'core/local_engine.dart';
 import 'core/local_hermes.dart';
 import 'core/services/connection_manager.dart';
+import 'core/theme/hermes_theme.dart';
 import 'local_app/chat_page.dart';
 
 void runLocalHermesApp() => runApp(const LocalHermesApp());
@@ -76,15 +77,8 @@ class _LocalHermesAppState extends State<LocalHermesApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Hermes Lokal',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF5B6EE1),
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF5B6EE1),
-        brightness: Brightness.dark,
-      ),
+      theme: hermesTheme(Brightness.light),
+      darkTheme: hermesTheme(Brightness.dark),
       home: _booting
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
           : _error != null
