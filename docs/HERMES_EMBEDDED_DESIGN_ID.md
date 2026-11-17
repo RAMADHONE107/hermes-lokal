@@ -129,6 +129,10 @@ Script pembuat: `scripts/build-runtime-bundle.sh` (dijalankan di Termux dengan
 `assets/hermes/runtime-manifest.json`.
 
 Hermes di-pin ke versi yang kompatibel dengan Python 3.12 Ubuntu (MVP: `0.19.0`).
+`aiohttp` harus di-install eksplisit: Hermes 0.19 hanya mengereknya lewat extra
+`[messaging]`, sementara API server diam-diam menolak start tanpa `aiohttp`
+(`check_api_server_requirements()` mengembalikan False, `/health` tidak pernah
+hidup). Script bundle memeriksa ini sebelum mengemas.
 
 ## 5. Keamanan
 

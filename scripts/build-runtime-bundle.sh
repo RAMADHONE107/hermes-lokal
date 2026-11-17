@@ -32,6 +32,14 @@ cp -L "$PREFIX/lib/libandroid-shmem.so" "$STAGE/runtime/lib/libandroid-shmem.so"
 cp "$PREFIX/libexec/proot/loader" "$PREFIX/libexec/proot/loader32" "$STAGE/runtime/libexec/proot/"
 
 cp -a "$ROOTFS" "$STAGE/runtime/rootfs"
+
+# Drop package-manager and documentation payloads; they are useless at
+# runtime and easily add hundreds of megabytes to the first-run download.
+rm -rf "$STAGE/runtime/rootfs/var/lib/apt/lists/"* \
+       "$STAGE/runtime/rootfs/var/cache/apt/archives/"*.deb \
+       "$STAGE/runtime/rootfs/usr/share/doc/"* \
+       "$STAGE/runtime/rootfs/usr/share/man/"* 2>/dev/null || true
+
 mkdir -p "$STAGE/runtime/rootfs/usr/local/bin"
 
 cat > "$STAGE/runtime/rootfs/usr/local/bin/hermes-start.sh" <<'LAUNCHER'
@@ -54,7 +62,7 @@ fi
 
 # The API server silently refuses to start without aiohttp. Fail the bundle
 # build early instead of shipping a runtime whose /health never comes up.
-if ! find "$STAGE/runtime/rootfs/usr/lib/python3"* -maxdepth 3 -type d -name aiohttp 2>/dev/null | grep -q .; then
+if ! find "$STAGE/runtime/rootfs/usr/lib/python3"* "$STAGE/runtime/rootfs/usr/local/lib/python3"* -maxdepth 3 -type d -name aiohttp 2>/dev/null | grep -q .; then
   echo "aiohttp is missing in the rootfs. Install it first:" >&2
   echo "  proot-distro login ubuntu2404 -- python3 -m pip install 'aiohttp==3.14.1'" >&2
   exit 1
@@ -63,7 +71,7 @@ fi
 SIZE=$(du -sb "$STAGE/runtime" | cut -f1)
 # --dereference/--hard-dereference keep the archive to regular files and
 # directories, matching the minimal extractor in HermesTar.kt.
-tar --format=ustar --dereference --hard-dereference -czf "$BUNDLE" -C "$STAGE" runtime
+tar --format=ustar --dereference --hard-dereference -czf "$BUNDLE" -C "$STAGE/runtime" .
 SHA=$(sha256sum "$BUNDLE" | cut -d' ' -f1)
 
 cat > "$OUT_DIR/runtime-manifest.json" <<MANIFEST
