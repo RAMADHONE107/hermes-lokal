@@ -37,7 +37,7 @@ android {
        targetSdk = 36
        versionCode = flutter.versionCode
        versionName = flutter.versionName
-       manifestPlaceholders["appLabel"] = "Ares"
+       manifestPlaceholders["appLabel"] = "Hermes Lokal"
        buildConfigField("boolean", "PLAY_BUILD", playBuild.toString())
        }
 
@@ -63,7 +63,7 @@ android {
            // verifies the packaged arm64 code against that scheme.
            applicationIdSuffix = ".dev"
            versionNameSuffix = "-dev"
-           manifestPlaceholders["appLabel"] = "Ares Dev"
+           manifestPlaceholders["appLabel"] = "Hermes Lokal Dev"
        }
        release {
            isMinifyEnabled = true

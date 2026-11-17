@@ -1,0 +1,100 @@
+name: Build Hermes Lokal APK
+
+# Fork-specific workflow. The upstream release.yml expects the maintainer's
+# private signing key and exact release tag, so a fork can never use it.
+# This one generates its own key and builds an installable arm64 APK.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      PUB_CACHE: ${{ github.workspace }}/.pub-cache
+      LOCAL_KEY_PASSWORD: hermes-lokal-local-build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.pub-cache
+          key: flutter-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
+          restore-keys: flutter-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Make jni native build reproducible
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path(os.environ["PUB_CACHE"]) / "hosted/pub.dev/jni-1.0.0/src/CMakeLists.txt"
+          append = '\nif (ANDROID)\n\ttarget_link_options(jni PRIVATE "-Wl,--build-id=none")\nendif()\n'
+          if '--build-id=none' not in p.read_text():
+              with p.open('a') as f:
+                  f.write(append)
+          print('patched', p)
+          PY
+
+      - name: Generate a local signing key
+        run: |
+          keytool -genkeypair -v \
+            -keystore "$GITHUB_WORKSPACE/local.keystore" \
+            -alias hermes-lokal \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "$LOCAL_KEY_PASSWORD" -keypass "$LOCAL_KEY_PASSWORD" \
+            -dname "CN=Hermes Lokal, OU=Local, O=Hermes Lokal, C=ID"
+          cat > key.properties <<EOF
+          storePassword=$LOCAL_KEY_PASSWORD
+          keyPassword=$LOCAL_KEY_PASSWORD
+          keyAlias=hermes-lokal
+          storeFile=$GITHUB_WORKSPACE/local.keystore
+          EOF
+
+      - name: Analyze and test
+        run: |
+          flutter analyze --no-pub --fatal-infos
+          flutter test --no-pub
+
+      - name: Build arm64 release APK
+        # ARES_PLAY_BUILD disables the upstream GitHub self-updater: this fork
+        # must never offer to install the maintainer's differently-signed APK.
+        run: flutter build apk --release --split-per-abi --no-pub --dart-define=ARES_PLAY_BUILD=true
+
+      - name: Verify and rename APK
+        run: |
+          set -euo pipefail
+          apk="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/apksigner" verify "$apk"
+          mv "$apk" hermes-lokal-arm64-v8a.apk
+          sha256sum hermes-lokal-arm64-v8a.apk | tee hermes-lokal-arm64-v8a.sha256
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: hermes-lokal-arm64-v8a
+          path: |
+            hermes-lokal-arm64-v8a.apk
+            hermes-lokal-arm64-v8a.sha256
+          retention-days: 30

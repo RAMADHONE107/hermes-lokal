@@ -27,6 +27,7 @@ import 'core/services/connection_mutation_barrier.dart';
 import 'core/services/notification_prefs.dart';
 import 'core/services/hands_free_preference.dart';
 import 'core/services/hermes_sign_in.dart';
+import 'core/local_hermes.dart';
 import 'core/services/locale_preference.dart';
 import 'core/services/lan_discovery_service.dart';
 import 'core/services/text_size_preference.dart';
@@ -1638,6 +1639,13 @@ class HomeScreenState extends State<HomeScreen> {
               title: Text(context.l10n.add_connection),
               onTap: () => Navigator.pop(sheet, 'classic'),
             ),
+            ListTile(
+              key: const ValueKey('add-local-connection'),
+              leading: const Icon(Icons.smartphone),
+              title: const Text(LocalHermes.label),
+              subtitle: const Text(LocalHermes.setupHint),
+              onTap: () => Navigator.pop(sheet, 'local'),
+            ),
           ],
         ),
       ),
@@ -1647,6 +1655,12 @@ class HomeScreenState extends State<HomeScreen> {
       _showSingleLogin();
     } else if (choice == 'classic') {
       _showConnectionDialog();
+    } else if (choice == 'local') {
+      _showConnectionDialog(
+        initialHost: LocalHermes.host,
+        initialPort: LocalHermes.port,
+        initialLabel: LocalHermes.label,
+      );
     }
   }
 
