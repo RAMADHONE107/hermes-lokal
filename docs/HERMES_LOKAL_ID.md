@@ -69,7 +69,7 @@ gh release create v0.2.0-runtime \
 ```
 
 Salin `sha256` dan `sizeBytes` dari `~/hermes-bundle/runtime-manifest.json`
-ke `assets/hermes/runtime-manifest.json`, lalu build ulang APK.
+ke `android/app/src/main/assets/hermes/runtime-manifest.json`, lalu build ulang APK.
 
 Script hanya menyalin rootfs ke stage, memangkas paket yang tidak diperlukan
 server API headless (LLVM, Mesa, gcc, perl, modul node, ikon, dll), lalu

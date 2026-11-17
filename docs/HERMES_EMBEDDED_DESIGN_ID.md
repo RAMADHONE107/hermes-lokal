@@ -126,7 +126,7 @@ runtime/
 
 Script pembuat: `scripts/build-runtime-bundle.sh` (dijalankan di Termux dengan
 `proot-distro ubuntu` terpasang). Hash hasil build masuk
-`assets/hermes/runtime-manifest.json`.
+`android/app/src/main/assets/hermes/runtime-manifest.json`.
 
 Hermes di-pin ke versi yang kompatibel dengan Python 3.12 Ubuntu (MVP: `0.19.0`).
 `aiohttp` harus di-install eksplisit: Hermes 0.19 hanya mengereknya lewat extra
