@@ -7,6 +7,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <application
         android:label="${appLabel}"
         android:name="${applicationName}"
@@ -77,6 +78,15 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Keeps a user-started Hermes reply streaming while the app is backgrounded; the service runs only while that reply is still being produced and stops as soon as it finishes" />
+        </service>
+        <!-- Hosts the embedded Hermes gateway inside this app's private storage. -->
+        <service
+            android:name=".HermesEngineService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the on-device Hermes agent running after the chat screen is closed; the user starts and stops it explicitly" />
         </service>
     </application>
     <queries>

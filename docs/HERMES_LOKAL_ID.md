@@ -2,112 +2,118 @@
 
 ## Apa ini?
 
-Fork [Ares](https://github.com/rusty4444/ares) (dulu Hermes Android) yang
-ditambah opsi koneksi **Hermes Lokal**. Ares adalah *client* Flutter; engine
-Hermes Agent tetap harus berjalan di suatu tempat. Di fork ini engine tersebut
-hidup **di dalam HP yang sama**, memakai Termux + proot Ubuntu.
+Fork [Ares](https://github.com/rusty4444/ares) yang ditambah opsi koneksi
+**Hermes Lokal**. Bedanya dengan panduan lama: engine Hermes **tidak lagi
+dijalankan dari Termux yang berdiri sendiri**. Runtime-nya diunduh sekali,
+disimpan di storage privat aplikasi, dan dijalankan oleh foreground service
+milik APK ini sendiri.
 
 ```
-[ APK Hermes Lokal ]  --127.0.0.1:8642-->  [ proot Ubuntu di Termux ]  --> [ Hermes Agent ]
+[ APK Hermes Lokal ]
+   ├─ UI Flutter (Ares)
+   ├─ HermesEngineService (foreground)
+   └─ files/hermes-runtime/
+        ├─ proot + loader
+        └─ rootfs Ubuntu + Python + Hermes Agent
+                │
+                └─ 127.0.0.1:8642 → /v1/chat/completions
 ```
 
-proot memakai network namespace Android yang sama, jadi gateway hanya perlu
-mendengar di loopback. Tidak ada port yang dibuka ke Wi-Fi/LAN.
+Dari sisi pemakai: buka aplikasi, tekan **Kelola Mesin Lokal**, siapkan,
+mulai, lalu chat. Tidak perlu membuka Termux.
 
-## Prasyarat di HP
+Desain lengkap: [`HERMES_EMBEDDED_DESIGN_ID.md`](HERMES_EMBEDDED_DESIGN_ID.md).
+
+## Prasyarat
 
 - Android 11+ (arm64 / `aarch64`)
-- Termux dari F-Droid (bukan versi Play Store yang sudah tidak dirawat)
-- Ruang kosong minimal 5 GB (rootfs Ubuntu + Python + Node + model)
+- Ruang kosong ±2–3 GB untuk runtime (download pertama kali)
 - RAM 4 GB atau lebih disarankan
-- Koneksi internet saat instalasi
-- Paket `hermes-agent` APT resmi sedang bermasalah menurut dokumentasi
-  upstream, maka jalur proot Ubuntu yang dipakai di sini
+- Internet hanya saat first run / saat mengunduh bundle runtime
 
 ## 1. Build APK
 
-1. Fork repo ini ke akun GitHub sendiri, atau buat repo baru lalu push isi
-   folder ini ke branch `main`.
-2. Buka tab **Actions** di repo tersebut → izinkan workflow.
-3. Workflow **Build Hermes Lokal APK** jalan otomatis saat push ke `main`.
-   Bisa juga dipicu manual lewat **Run workflow**.
-4. Setelah selesai, buka artefak `hermes-lokal-arm64-v8a`, download, lalu
-   buka di HP (izinkan *Install unknown apps* untuk file manager/browser).
+1. Push perubahan ke branch `main` repo `RAMADHONE107/hermes-lokal`.
+2. Buka tab **Actions** → workflow **Build Hermes Lokal APK**.
+3. Setelah selesai, unduh artefak `hermes-lokal-arm64-v8a`, lalu install di HP
+   (izinkan *Install unknown apps*).
 
-Workflow ini **sengaja terpisah** dari `release.yml` upstream. File itu
-mensyaratkan keystore pribadi maintainer dan tag rilis persis `v4.0.4`, jadi
-tidak akan pernah berhasil di fork.
+Workflow ini sengaja terpisah dari `release.yml` upstream karena butuh
+keystore pribadi maintainer dan tag `v4.0.4`.
 
-> Keystore di workflow dibuat sendiri dengan password tetap
-> `hermes-lokal-local-build`. Itu cukup untuk sideload pribadi. Ganti dengan
-> GitHub Secrets sebelum membagikan APK ke orang lain.
+> Keystore CI dibuat sendiri dengan password `hermes-lokal-local-build`.
+> Cukup untuk sideload pribadi. Ganti dengan GitHub Secrets sebelum distribusi
+> luas.
 
-## 2. Pasang engine di HP
+## 2. Siapkan bundle runtime (developer)
 
-Buka Termux, lalu dari folder repo yang sudah di-clone di HP:
+Bundle tidak ikut di APK supaya ukuran APK tetap ~100 MB. Bundle dibuat di
+perangkat Termux lalu di-upload sebagai GitHub Release asset.
 
 ```bash
-pkg install -y git
-git clone <URL_REPO_FORK_KAMU> ~/hermes-lokal
-cd ~/hermes-lokal
-bash scripts/install-local-hermes.sh install
-```
-
-Script akan memasang proot-distro, Ubuntu, lalu Hermes Agent di dalamnya.
-Setelah itu konfigurasi provider/model sekali saja:
-
-```bash
+pkg install -y proot-distro
+proot-distro install ubuntu
 proot-distro login ubuntu
-hermes setup
-exit
-```
+  apt-get update
+  apt-get install -y python3 python3-pip nodejs npm git ripgrep ffmpeg
+  python3 -m pip install hermes-agent==0.19.0
+  exit
 
-Lalu jalankan gateway:
-
-```bash
 cd ~/hermes-lokal
-bash scripts/install-local-hermes.sh start
-bash scripts/install-local-hermes.sh status
+bash scripts/build-runtime-bundle.sh ~/hermes-bundle v0.2.0-runtime
+gh release create v0.2.0-runtime \
+  ~/hermes-bundle/hermes-runtime-arm64-v8a.tar.gz \
+  --repo RAMADHONE107/hermes-lokal \
+  --title "Hermes runtime arm64" \
+  --notes "Offline runtime bundle for Hermes Lokal"
 ```
 
-Perintah `start` mencetak `API_SERVER_KEY` dari `~/.hermes/.env` di dalam
-rootfs. Simpan nilai itu sebentar — tidak perlu dibagikan ke siapa pun.
+Salin `sha256` dan `sizeBytes` dari `~/hermes-bundle/runtime-manifest.json`
+ke `assets/hermes/runtime-manifest.json`, lalu build ulang APK.
 
-Agar proses tidak dimatikan Android saat layar mati:
+> Status saat ini: mekanisme download + verifikasi sudah ada, tapi asset
+> runtime belum di-upload. Sampai itu terjadi, tombol **Siapkan** akan gagal
+> dengan pesan checksum/HTTP. Ini bukan bug pada service-nya.
 
-```bash
-pkg install -y termux-api
-termux-wake-lock
-```
-
-Matikan juga battery optimization untuk Termux di Settings Android.
-
-## 3. Hubungkan dari APK
+## 3. Pakai di HP
 
 1. Buka **Hermes Lokal**.
-2. Tekan tombol **+** → pilih **Hermes Lokal**.
-3. Kolom Host, Port, dan Label sudah terisi (`127.0.0.1`, `8642`).
-4. Tempel `API_SERVER_KEY` dari langkah sebelumnya ke kolom API Key.
-5. Simpan, lalu buka sesi/chat.
+2. Tekan **+** → **Kelola Mesin Lokal**.
+3. Tekan **Siapkan**. Tunggu progress unduh + ekstrak selesai.
+4. Tekan **Mulai**. Status berubah menjadi **Berjalan**.
+5. Kembali ke **+** → **Hermes Lokal**. Host, port, dan API key sudah terisi
+   otomatis. Simpan koneksi.
+6. Buka chat dan bicara seperti biasa.
 
-Opsi ini hanya men-provide default. Kamu masih bisa menambah koneksi remote
-biasa lewat menu **Add Connection** yang lama.
+API key dibuat lokal (32 byte hex) dan hanya disimpan di
+`files/hermes-data/.env`. Tidak pernah dikirim ke server kita.
+
+## 4. Konfigurasi provider / model
+
+Hermes masih butuh provider LLM. Dua jalur:
+
+- Pakai UI Ares yang sudah ada untuk mengubah provider/model lewat gateway.
+- Atau, saat runtime sudah terpasang, jalankan setup sekali dari dalam
+  rootfs memakai terminal apa pun yang bisa mengeksekusi bundle (misalnya
+  lewat mode diagnostic yang akan ditambahkan di phase 2).
+
+Untuk MVP, API key provider bisa ditaruh di `.env` rootfs sebelum bundle
+dibuat, atau lewat perintah `hermes setup` saat build bundle.
 
 ## Masalah umum
 
 | Gejala | Penyebab / solusi |
 | --- | --- |
-| `status` bilang MATI setelah `start` | Lihat `~/.hermes/logs/gateway.log` di dalam `proot-distro login ubuntu`. Kemungkinan `hermes setup` belum dijalankan. |
-| APK tidak bisa install | HP belum mengizinkan install dari sumber unknown, atau APK x86_64 yang terdownload. Pakai artefak `arm64-v8a`. |
-| Chat terputus saat layar mati | Android mematikan proses latar belakang. Pakai `termux-wake-lock` + matikan battery optimization. |
-| Ingin update engine | Di dalam Ubuntu: `hermes update`. Ini tidak mengubah APK. |
-| Ingin update APK | Push perubahan ke `main`, unduh artefak baru, install di atas yang lama (keystore sama). |
+| **Siapkan** gagal "Checksum runtime tidak cocok" | Manifest belum diperbarui setelah upload bundle, atau file unduhan korup. |
+| **Siapkan** gagal "Unduh gagal (HTTP 404)" | Asset release belum di-upload / URL di manifest salah. |
+| **Mulai** gagal "Runtime tidak lengkap" | Ekstrak tidak selesai. Hapus data aplikasi lalu siapkan ulang. |
+| Chat tidak balas | Gateway belum `RUNNING`, atau provider belum dikonfigurasi. Cek **Log mesin**. |
+| Mesin mati sendiri | Matikan battery optimization untuk Hermes Lokal di Settings Android. |
+| Ingin update engine | Build bundle baru, upload, perbarui manifest, build ulang APK. |
 
 ## Batasan yang disadari
 
-- Engine tidak benar-benar "di dalam APK". Android tidak bisa menjalankan
-  Python/Node + wheel native langsung dari APK; Termux + proot tetap dibutuhkan.
-- Tidak ada dukungan voice/wake-word lokal lewat Termux:API dari paket APT
-  upstream (disebutkan di dokumentasi resmi).
-- Browser/computer-use tidak tersedia kecuali Chromium dipasang di rootfs.
+- MVP hanya mendukung `arm64-v8a`.
+- Runtime diunduh sekali; belum ada self-update dari dalam aplikasi.
+- OAuth Nous Portal belum punya UI khusus di panel mesin.
 - Ini fork komunitas, bukan rilis resmi Nous Research.

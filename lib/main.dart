@@ -27,7 +27,9 @@ import 'core/services/connection_mutation_barrier.dart';
 import 'core/services/notification_prefs.dart';
 import 'core/services/hands_free_preference.dart';
 import 'core/services/hermes_sign_in.dart';
+import 'core/local_engine.dart';
 import 'core/local_hermes.dart';
+import 'ui/local_engine_screen.dart';
 import 'core/services/locale_preference.dart';
 import 'core/services/lan_discovery_service.dart';
 import 'core/services/text_size_preference.dart';
@@ -1646,6 +1648,13 @@ class HomeScreenState extends State<HomeScreen> {
               subtitle: const Text(LocalHermes.setupHint),
               onTap: () => Navigator.pop(sheet, 'local'),
             ),
+            ListTile(
+              key: const ValueKey('manage-local-engine'),
+              leading: const Icon(Icons.memory),
+              title: const Text('Kelola Mesin Lokal'),
+              subtitle: const Text('Siapkan, mulai, dan setop engine di aplikasi ini'),
+              onTap: () => Navigator.pop(sheet, 'manage'),
+            ),
           ],
         ),
       ),
@@ -1656,10 +1665,25 @@ class HomeScreenState extends State<HomeScreen> {
     } else if (choice == 'classic') {
       _showConnectionDialog();
     } else if (choice == 'local') {
+      String? apiKey;
+      try {
+        apiKey = await LocalEngineClient.instance.apiKey();
+      } on LocalEngineException {
+        apiKey = null;
+      }
+      if (!mounted) return;
       _showConnectionDialog(
         initialHost: LocalHermes.host,
         initialPort: LocalHermes.port,
         initialLabel: LocalHermes.label,
+        initialApiKey: apiKey,
+      );
+    } else if (choice == 'manage') {
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => const LocalEngineScreen(),
+        ),
       );
     }
   }
@@ -1699,6 +1723,7 @@ class HomeScreenState extends State<HomeScreen> {
     String? initialHost,
     int? initialPort,
     String? initialLabel,
+    String? initialApiKey,
   }) {
     showDialog(
       context: context,
@@ -1707,6 +1732,7 @@ class HomeScreenState extends State<HomeScreen> {
         initialHost: initialHost,
         initialPort: initialPort,
         initialLabel: initialLabel,
+        initialApiKey: initialApiKey,
         onCertificateFilesReleased:
             widget.connManager.cleanupUnreferencedCertificates,
         onSave:
@@ -2380,6 +2406,7 @@ class _AddDialog extends StatefulWidget {
   final String? initialHost;
   final int? initialPort;
   final String? initialLabel;
+  final String? initialApiKey;
 
   const _AddDialog({
     required this.onSave,
@@ -2388,6 +2415,7 @@ class _AddDialog extends StatefulWidget {
     this.initialHost,
     this.initialPort,
     this.initialLabel,
+    this.initialApiKey,
   });
 
   @override
@@ -2456,7 +2484,9 @@ class _AddDialogState extends State<_AddDialog> {
     _port = TextEditingController(
       text: (widget.initialPort ?? conn?.port ?? 8642).toString(),
     );
-    _apiKey = TextEditingController(text: conn?.apiKey ?? '');
+    _apiKey = TextEditingController(
+      text: conn?.apiKey ?? widget.initialApiKey ?? '',
+    );
     _gatewayPrefix = TextEditingController(text: conn?.gatewayPrefix ?? '');
     _dashboardPrefix = TextEditingController(text: conn?.dashboardPrefix ?? '');
     _dashPort = TextEditingController(

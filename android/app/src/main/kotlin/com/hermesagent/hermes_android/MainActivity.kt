@@ -69,6 +69,7 @@ class MainActivity : FlutterActivity() {
         attachmentFileSaver?.close()
         attachmentFileSaver = AttachmentFileSaver(this, flutterEngine.dartExecutor.binaryMessenger)
         BackgroundWorkPlatform.install(this, flutterEngine.dartExecutor.binaryMessenger)
+        HermesEngineChannel.install(this, flutterEngine.dartExecutor.binaryMessenger)
         MobilePushPlugin.install(flutterEngine)
         handsFreeVoice = HandsFreeVoicePlugin.install(flutterEngine)
         shareChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, shareChannelName).apply {
@@ -123,6 +124,7 @@ class MainActivity : FlutterActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         handsFreeVoice?.setForeground(false)
         handsFreeVoice = null
+        HermesEngineChannel.teardown()
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
