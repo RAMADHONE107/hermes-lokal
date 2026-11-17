@@ -34,7 +34,11 @@ android {
        }
        applicationId = "com.hermesagent.hermes_android"
        minSdk = 24
-       targetSdk = 36
+       // The bundled engine exec()s proot and the launcher from app-private
+       // storage. Android 10+ (API 29+) blocks execute_no_trans on
+       // app_data_file for untrusted apps, which fails with EACCES. Target 28
+       // keeps the compatibility SELinux domain that still allows it.
+       targetSdk = 28
        versionCode = flutter.versionCode
        versionName = flutter.versionName
        manifestPlaceholders["appLabel"] = "Hermes Lokal"
