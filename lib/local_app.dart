@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 
 import 'core/local_engine.dart';
 import 'core/local_hermes.dart';
-import 'core/models/session.dart';
 import 'core/services/connection_manager.dart';
 import 'local_app/chat_page.dart';
 
