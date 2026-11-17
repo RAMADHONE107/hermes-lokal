@@ -54,6 +54,14 @@ class HermesEngineController private constructor(private val app: Application) {
     private var wakeLock: PowerManager.WakeLock? = null
     private val logLock = Any()
 
+    // Diagnostics writes to MediaStore are comparatively expensive. Throttle
+    // them so extraction progress never turns into one row rewrite per tar
+    // chunk, and so reading the log tail cannot block on diagnostic I/O.
+    private var lastDumpAt = 0L
+    private var lastDumpedState: State? = null
+    @Volatile
+    private var extractedBytes = 0L
+
     val runtimeDir: File get() = File(app.filesDir, "hermes-runtime")
     val dataDir: File get() = File(app.filesDir, "hermes-data")
     val logFile: File get() = File(app.filesDir, "hermes-engine.log")
@@ -110,11 +118,17 @@ class HermesEngineController private constructor(private val app: Application) {
                 update(Status(State.EXTRACTING, 0, "Mengekstrak runtime…", manifest.version))
                 val staging = File(app.filesDir, "hermes-runtime-new")
                 staging.deleteRecursively()
+                var lastPercent = 0
+                extractedBytes = 0L
                 HermesTar.extract(archive, staging) { extracted, _ ->
+                    extractedBytes = extracted
                     val percent = if (manifest.sizeBytes > 0) {
                         ((extracted * 100) / manifest.sizeBytes).toInt().coerceIn(0, 99)
                     } else -1
-                    if (percent >= 0) {
+                    // Only report whole-percent changes. Every update() used to
+                    // trigger a MediaStore write, once per 16 KB chunk.
+                    if (percent > lastPercent) {
+                        lastPercent = percent
                         update(Status(State.EXTRACTING, percent, "Mengekstrak runtime…", manifest.version))
                     }
                 }
@@ -218,9 +232,19 @@ class HermesEngineController private constructor(private val app: Application) {
     }
 
     private fun dumpDiagnostics() {
+        val now = System.currentTimeMillis()
+        val stateChanged = status.state != lastDumpedState
+        if (!stateChanged && now - lastDumpAt < 3_000L) return
+        lastDumpedState = status.state
+        lastDumpAt = now
+
+        val stamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US).format(java.util.Date(now))
         val sb = StringBuilder()
+        sb.append("time=$stamp\n")
         sb.append("state=${status.state} progress=${status.progress} message=${status.message} version=${status.version}\n")
+        sb.append("extractedBytes=$extractedBytes\n")
         sb.append("runtimeDir=${runtimeDir.absolutePath} exists=${runtimeDir.exists()} ready=${File(runtimeDir, ".ready").exists()}\n")
+        sb.append("staging=${File(app.filesDir, "hermes-runtime-new").exists()}\n")
         sb.append("proot=${File(runtimeDir, "bin/proot").exists()} launcher=${File(runtimeDir, "rootfs/usr/local/bin/hermes-start.sh").exists()}\n")
         sb.append("dataDir=${dataDir.absolutePath} freeBytes=${dataDir.usableSpace}\n")
         sb.append("processAlive=${process?.isAlive}\n")
@@ -317,14 +341,18 @@ class HermesEngineController private constructor(private val app: Application) {
         app.startForegroundService(intent)
     }
 
-    private fun appendLog(line: String) = synchronized(logLock) {
-        FileOutputStream(logFile, true).use { out ->
-            out.write((line + "\n").toByteArray(Charsets.UTF_8))
+    private fun appendLog(line: String) {
+        synchronized(logLock) {
+            FileOutputStream(logFile, true).use { out ->
+                out.write((line + "\n").toByteArray(Charsets.UTF_8))
+            }
+            if (logFile.length() > 2L * 1024 * 1024) {
+                val kept = logFile.readLines().takeLast(500).joinToString("\n") + "\n"
+                logFile.writeText(kept)
+            }
         }
-        if (logFile.length() > 2L * 1024 * 1024) {
-            val kept = logFile.readLines().takeLast(500).joinToString("\n") + "\n"
-            logFile.writeText(kept)
-        }
+        // Never do MediaStore I/O while holding logLock: logTail() is called
+        // from the UI method channel and used to time out behind that write.
         if (line.contains("error", true) || line.contains("traceback", true) ||
             line.contains("failed", true) || line.contains("timeout", true)
         ) {
