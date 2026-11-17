@@ -217,6 +217,18 @@ class HermesEngineController private constructor(private val app: Application) {
         logFile.readLines().takeLast(maxLines).joinToString("\n")
     }
 
+    private fun dumpDiagnostics() {
+        val sb = StringBuilder()
+        sb.append("state=${status.state} progress=${status.progress} message=${status.message} version=${status.version}\n")
+        sb.append("runtimeDir=${runtimeDir.absolutePath} exists=${runtimeDir.exists()} ready=${File(runtimeDir, ".ready").exists()}\n")
+        sb.append("proot=${File(runtimeDir, "bin/proot").exists()} launcher=${File(runtimeDir, "rootfs/usr/local/bin/hermes-start.sh").exists()}\n")
+        sb.append("dataDir=${dataDir.absolutePath} freeBytes=${dataDir.usableSpace}\n")
+        sb.append("processAlive=${process?.isAlive}\n")
+        sb.append("--- log tail ---\n")
+        sb.append(logTail(300))
+        Diagnostics.write(app, sb.toString())
+    }
+
     private fun stopProcessIfAny() {
         val child = process ?: return
         try {
@@ -313,10 +325,16 @@ class HermesEngineController private constructor(private val app: Application) {
             val kept = logFile.readLines().takeLast(500).joinToString("\n") + "\n"
             logFile.writeText(kept)
         }
+        if (line.contains("error", true) || line.contains("traceback", true) ||
+            line.contains("failed", true) || line.contains("timeout", true)
+        ) {
+            dumpDiagnostics()
+        }
     }
 
     private fun update(next: Status) {
         status = next
         mainHandler.post { listeners.forEach { it(next) } }
+        dumpDiagnostics()
     }
 }
