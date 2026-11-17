@@ -27,7 +27,7 @@ Desain lengkap: [`HERMES_EMBEDDED_DESIGN_ID.md`](HERMES_EMBEDDED_DESIGN_ID.md).
 ## Prasyarat
 
 - Android 11+ (arm64 / `aarch64`)
-- Ruang kosong ±2–3 GB untuk runtime (download pertama kali)
+- Ruang kosong ±2 GB untuk runtime (bundle ~276 MB, hasil ekstrak ~830 MB)
 - RAM 4 GB atau lebih disarankan
 - Internet hanya saat first run / saat mengunduh bundle runtime
 
@@ -71,9 +71,15 @@ gh release create v0.2.0-runtime \
 Salin `sha256` dan `sizeBytes` dari `~/hermes-bundle/runtime-manifest.json`
 ke `assets/hermes/runtime-manifest.json`, lalu build ulang APK.
 
-> Status saat ini: mekanisme download + verifikasi sudah ada, tapi asset
-> runtime belum di-upload. Sampai itu terjadi, tombol **Siapkan** akan gagal
-> dengan pesan checksum/HTTP. Ini bukan bug pada service-nya.
+Script hanya menyalin rootfs ke stage, memangkas paket yang tidak diperlukan
+server API headless (LLVM, Mesa, gcc, perl, modul node, ikon, dll), lalu
+membuat tar dengan symlink utuh. Ekstraktor di APK menulis ulang target
+symlink absolut ke path relatif di dalam `rootfs`, jadi runtime hasil ekstrak
+bisa dipakai tanpa Termux.
+
+> Status saat ini: release `v0.2.0-runtime` sudah berisi bundle arm64 dan
+> manifest di APK sudah mengacu ke SHA-256-nya. Runtime diverifikasi sekali
+> saat download, lalu dipakai offline.
 
 ## 3. Pakai di HP
 
