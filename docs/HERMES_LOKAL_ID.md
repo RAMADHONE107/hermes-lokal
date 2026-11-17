@@ -41,9 +41,10 @@ Desain lengkap: [`HERMES_EMBEDDED_DESIGN_ID.md`](HERMES_EMBEDDED_DESIGN_ID.md).
 Workflow ini sengaja terpisah dari `release.yml` upstream karena butuh
 keystore pribadi maintainer dan tag `v4.0.4`.
 
-> Keystore CI dibuat sendiri dengan password `hermes-lokal-local-build`.
-> Cukup untuk sideload pribadi. Ganti dengan GitHub Secrets sebelum distribusi
-> luas.
+> APK ditandatangani dengan keystore permanen yang disimpan sebagai GitHub
+> Secrets `SIGNING_KEYSTORE_BASE64` dan `SIGNING_KEYSTORE_PASSWORD`. Ini
+> penting agar update berikutnya bisa mengganti versi terpasang tanpa error
+> "paket tidak valid". Jangan buang kedua secret tersebut.
 
 ## 2. Siapkan bundle runtime (developer)
 
