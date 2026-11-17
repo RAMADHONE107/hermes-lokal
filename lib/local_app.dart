@@ -134,6 +134,7 @@ class _LocalHomePageState extends State<LocalHomePage> {
   bool _loading = true;
   String? _error;
   StreamSubscription<LocalEngineStatus>? _engineStatus;
+  LocalEngineStatus? _status;
   LocalEngineState? _lastEngineState;
 
   @override
@@ -143,6 +144,16 @@ class _LocalHomePageState extends State<LocalHomePage> {
     // on the transition to running, not on every progress event.
     _engineStatus = LocalEngineClient.instance.status.listen((status) {
       final wasRunning = _lastEngineState == LocalEngineState.running;
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        if (status.state.isBusy || status.state == LocalEngineState.absent) {
+          // The gateway cannot answer yet; any stale connection error is
+          // expected noise, not a failure of the local engine.
+          _error = null;
+          _loading = false;
+        }
+      });
       _lastEngineState = status.state;
       if (!wasRunning && status.state == LocalEngineState.running) {
         unawaited(_reload());
@@ -158,6 +169,19 @@ class _LocalHomePageState extends State<LocalHomePage> {
   }
 
   Future<void> _reload() async {
+    // Do not hit loopback while the runtime is still being prepared: the
+    // socket does not exist yet and would only surface a scary connection
+    // error that looks like a broken app.
+    final status = _status ?? await LocalEngineClient.instance.currentStatus();
+    if (status.state != LocalEngineState.running) {
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        _error = null;
+        _loading = false;
+      });
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -211,7 +235,16 @@ class _LocalHomePageState extends State<LocalHomePage> {
       body: Column(
         children: [
           const EngineStatusCard(),
-          if (_error != null)
+          if (_status?.state.isBusy == true ||
+              _status?.state == LocalEngineState.absent)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Text(
+                '${_status!.state.label}… percakapan tersedia setelah mesin berjalan.',
+                style: theme.textTheme.bodySmall,
+              ),
+            )
+          else if (_error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Text(
