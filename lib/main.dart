@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' as io;
 
-import 'package:flutter/foundation.dart' show defaultTargetPlatform;
+import 'package:flutter/foundation.dart' show debugPrint, defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'core/services/hands_free_route_observer.dart';
 import 'package:file_picker/file_picker.dart';
@@ -42,7 +42,6 @@ import 'core/utils/responsive.dart';
 import 'core/widgets/config_backup_card.dart';
 import 'core/widgets/theme_palette_picker.dart';
 import 'core/widgets/hermes_system_ui.dart';
-import 'core/widgets/setup_interface_choice.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'package:hermes_android/core/l10n/l10n.dart';
@@ -116,6 +115,9 @@ class _StartupAppState extends State<StartupApp> {
           // existing reset/retry screen, never to Home with unhydrated secrets.
           startupError = error;
         }
+        if (connManager != null) {
+          await _bootstrapLocalConnection(prefs, connManager!);
+        }
       }(),
       _shareIntents.initialize(),
       _launchIntents.initialize(),
@@ -126,6 +128,52 @@ class _StartupAppState extends State<StartupApp> {
       _connManager = connManager;
       _startupError = startupError;
     });
+  }
+
+  /// On a fresh production install, register the embedded engine's local
+  /// connection so the user lands straight into chat instead of a setup step.
+  /// Runs once; on failure the normal empty state stays and it is retried the
+  /// next launch.
+  Future<void> _bootstrapLocalConnection(
+    SharedPreferences prefs,
+    ConnectionManager connManager,
+  ) async {
+    // Only the packaged Android app bootstraps. Tests inject a manager creator
+    // and must keep their pristine first-frame state.
+    if (!io.Platform.isAndroid || widget.createConnectionManager != null) {
+      return;
+    }
+    const bootstrapKey = 'hermes_local_bootstrap_v1';
+    if (prefs.getBool(bootstrapKey) ?? false) return;
+    try {
+      final connections = await connManager.loadConnectionsWithSecrets();
+      if (connections.isNotEmpty) {
+        await prefs.setBool(bootstrapKey, true);
+        return;
+      }
+      final apiKey = await LocalEngineClient.instance.apiKey();
+      await connManager.saveConnection(
+        LocalHermes.label,
+        LocalHermes.host,
+        LocalHermes.port,
+        apiKey,
+      );
+      await prefs.setBool(bootstrapKey, true);
+      // Download, extraction and gateway start are slow; keep them off the
+      // startup path so Home mounts immediately.
+      unawaited(
+        LocalEngineClient.instance
+            .prepare()
+            .then((_) => LocalEngineClient.instance.start())
+            .catchError((Object error) {
+          debugPrint('Local engine auto-start failed: $error');
+        }),
+      );
+    } catch (error) {
+      // Never block startup on the engine; the connection can still be added
+      // from the + menu and bootstrap is retried on the next launch.
+      debugPrint('Local connection bootstrap skipped: $error');
+    }
   }
 
   @override
@@ -2293,20 +2341,6 @@ class HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SetupInterfaceChoice(
-                        nextGen: false,
-                        onSelected: (nextGen) {
-                          if (nextGen) {
-                            unawaited(
-                              NextGenPreferences.setEnabled(
-                                widget.connManager.prefs,
-                                true,
-                              ),
-                            );
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
                       Icon(
                         Icons.cloud_outlined,
                         size: 44,
