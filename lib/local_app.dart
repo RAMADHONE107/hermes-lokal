@@ -26,11 +26,35 @@ class _LocalHermesAppState extends State<LocalHermesApp> {
   ApiClient? _api;
   String? _error;
   bool _booting = true;
+  StreamSubscription<LocalEngineStatus>? _engineStatus;
+  bool _startRequested = false;
 
   @override
   void initState() {
     super.initState();
+    // Native `prepare()`/`start()` return as soon as the work is QUEUED, so
+    // `prepare().then(start)` used to call start before the .ready marker
+    // existed and the engine never came up on a fresh install. Start on the
+    // transition to READY instead.
+    _engineStatus = LocalEngineClient.instance.status.listen((status) {
+      if (status.state == LocalEngineState.ready ||
+          status.state == LocalEngineState.running) {
+        unawaited(_ensureStarted());
+      }
+    });
     unawaited(_boot());
+  }
+
+  Future<void> _ensureStarted() async {
+    if (_startRequested) return;
+    _startRequested = true;
+    try {
+      final status = await LocalEngineClient.instance.currentStatus();
+      if (status.state == LocalEngineState.running) return;
+      await LocalEngineClient.instance.start();
+    } catch (_) {
+      _startRequested = false;
+    }
   }
 
   Future<void> _boot() async {
@@ -48,14 +72,10 @@ class _LocalHermesAppState extends State<LocalHermesApp> {
         _api = api;
         _booting = false;
       });
-      // The first launch downloads and extracts the runtime. Keep that off the
-      // UI path: chat simply reports "not ready" until the engine comes up.
-      unawaited(
-        LocalEngineClient.instance
-            .prepare()
-            .then((_) => LocalEngineClient.instance.start())
-            .catchError((Object _) {}),
-      );
+      // Download/extraction runs on the native executor; chat simply reports
+      // "not ready" until the gateway answers.
+      unawaited(LocalEngineClient.instance.prepare().catchError((Object _) {}));
+      unawaited(_ensureStarted());
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -68,6 +88,7 @@ class _LocalHermesAppState extends State<LocalHermesApp> {
 
   @override
   void dispose() {
+    _engineStatus?.cancel();
     _api?.close();
     super.dispose();
   }
@@ -153,7 +174,7 @@ class _LocalHomePageState extends State<LocalHomePage> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _error = 'Mesin lokal belum siap. Sedang menunggu runtime…';
+          _error = '$error';
           _loading = false;
         });
       }
@@ -279,6 +300,8 @@ class _EngineStatusCardState extends State<EngineStatusCard> {
   late final LocalEngineClient _client;
   StreamSubscription<LocalEngineStatus>? _subscription;
   LocalEngineStatus? _status;
+  String? _log;
+  bool _showLog = false;
 
   @override
   void initState() {
@@ -293,11 +316,20 @@ class _EngineStatusCardState extends State<EngineStatusCard> {
   Future<void> _refresh() async {
     try {
       final status = await _client.currentStatus();
-      if (mounted) setState(() => _status = status);
-    } catch (_) {
-      // The status card is informational; chat works as soon as the gateway
-      // answers, regardless of what the native side reports here.
+      if (!mounted) return;
+      setState(() => _status = status);
+      if (_showLog) {
+        final log = await _client.logTail();
+        if (mounted) setState(() => _log = log);
+      }
+    } catch (error) {
+      if (mounted) setState(() => _log = 'Gagal membaca log: $error');
     }
+  }
+
+  Future<void> _toggleLog() async {
+    setState(() => _showLog = !_showLog);
+    await _refresh();
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -381,8 +413,26 @@ class _EngineStatusCardState extends State<EngineStatusCard> {
                   onPressed: busy ? null : () => unawaited(_run(_client.stop)),
                   child: const Text('Setop'),
                 ),
+                TextButton(
+                  onPressed: () => unawaited(_toggleLog()),
+                  child: Text(_showLog ? 'Tutup log' : 'Lihat log'),
+                ),
               ],
             ),
+            if (_showLog) ...[
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 280),
+                child: SingleChildScrollView(
+                  child: SelectableText(
+                    _log?.isNotEmpty == true ? _log! : 'Belum ada log.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

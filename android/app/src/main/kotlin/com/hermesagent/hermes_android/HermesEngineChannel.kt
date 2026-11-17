@@ -2,6 +2,7 @@ package com.hermesagent.hermes_android
 
 import android.app.Application
 import android.content.Context
+import java.util.concurrent.CopyOnWriteArrayList
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -21,16 +22,26 @@ object HermesEngineChannel {
         }
         eventChannel = EventChannel(messenger, HermesEngine.EVENT_CHANNEL).apply {
             setStreamHandler(object : EventChannel.StreamHandler {
-                private var listener: ((HermesEngineController.Status) -> Unit)? = null
+                // Several widgets watch engine status at once. A single mutable
+                // field used to drop earlier listeners when a second one was
+                // added, and a single cancel could silence all of them.
+                private val listeners =
+                    CopyOnWriteArrayList<(HermesEngineController.Status) -> Unit>()
 
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                    listener = { status -> events?.success(status.toMap()) }
-                    listener?.let(controller::addListener)
+                    if (events == null) return
+                    val listener: (HermesEngineController.Status) -> Unit =
+                        { status -> events.success(status.toMap()) }
+                    listeners.add(listener)
+                    controller.addListener(listener)
                 }
 
                 override fun onCancel(arguments: Any?) {
-                    listener?.let(controller::removeListener)
-                    listener = null
+                    // EventChannel does not identify which sink cancelled; all
+                    // of our status listeners live for the app's lifetime, so
+                    // clearing them here cannot strand an active subscriber.
+                    listeners.forEach(controller::removeListener)
+                    listeners.clear()
                 }
             })
         }
