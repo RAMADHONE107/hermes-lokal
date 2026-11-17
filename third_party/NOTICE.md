@@ -137,6 +137,27 @@ extracted source and duplicates them in the separately accessible source/relink
 ZIP materials. The APK retains the archive's `.tar.gz.bin` alias to preserve the
 original compressed bytes; remove only `.bin` after extracting it.
 
+## proot — embedded runtime component
+
+Scope: the `bin/proot`, `lib/libtalloc.so.2`, `lib/libandroid-shmem.so` and
+`libexec/proot/loader*` binaries inside the downloadable `hermes-runtime-*.tar.gz`
+bundle. They are executed by the Android app's foreground service to start the
+bundled Ubuntu rootfs. The rootfs and Hermes Agent wheel are downloaded at
+first run, not vendored in the APK source tree.
+
+proot is free software licensed under **GPL-2.0-or-later**. Its complete licence
+text is supplied verbatim as [licenses/proot-GPL-2.0.txt](licenses/proot-GPL-2.0.txt),
+copied from the Ubuntu 24.04 `usr/share/common-licenses/GPL-2` file (SHA-256
+`8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643`).
+The corresponding source for the exact binaries shipped in the bundle is
+available from <https://github.com/termux/proot> and from the Termux package
+repository that produced them. Building the bundle from source is documented in
+[`../docs/HERMES_LOKAL_ID.md`](../docs/HERMES_LOKAL_ID.md).
+
+The accompanying Ubuntu rootfs contains many independently licensed packages;
+their own copyright and licence files are retained inside the rootfs and are
+shipped as part of the downloadable bundle.
+
 ## Existing independent notices
 
 Cinzel remains under the SIL OFL 1.1 in [../assets/fonts/OFL.txt](../assets/fonts/OFL.txt).

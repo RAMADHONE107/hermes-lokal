@@ -31,6 +31,11 @@ cp -L "$PREFIX/lib/libtalloc.so.2.5.0" "$STAGE/runtime/lib/libtalloc.so.2"
 cp -L "$PREFIX/lib/libandroid-shmem.so" "$STAGE/runtime/lib/libandroid-shmem.so"
 cp "$PREFIX/libexec/proot/loader" "$PREFIX/libexec/proot/loader32" "$STAGE/runtime/libexec/proot/"
 
+# The launcher bind-mounts /data at runtime, but the empty placeholder inside
+# the rootfs can be left mode 0000 by a prior proot bind. Make it copyable.
+if [ -d "$ROOTFS/data" ]; then
+  chmod -R u+rwX "$ROOTFS/data" 2>/dev/null || true
+fi
 cp -a "$ROOTFS" "$STAGE/runtime/rootfs"
 
 # Drop package-manager and documentation payloads; they are useless at
