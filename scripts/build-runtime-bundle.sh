@@ -45,6 +45,41 @@ rm -rf "$STAGE/runtime/rootfs/var/lib/apt/lists/"* \
        "$STAGE/runtime/rootfs/usr/share/doc/"* \
        "$STAGE/runtime/rootfs/usr/share/man/"* 2>/dev/null || true
 
+# The default Ubuntu container installs a lot of packages that a headless
+# Python API server never uses. Remove them from the stage only (the source
+# container stays intact) so the first-run download stays reasonable.
+R="$STAGE/runtime/rootfs"
+rm -rf \
+  "$R/usr/lib/aarch64-linux-gnu/libLLVM.so."* \
+  "$R/usr/lib/aarch64-linux-gnu/libvulkan_"*.so \
+  "$R/usr/lib/aarch64-linux-gnu/dri" \
+  "$R/usr/lib/aarch64-linux-gnu/libgallium-"*.so \
+  "$R/usr/lib/aarch64-linux-gnu/perl" \
+  "$R/usr/lib/aarch64-linux-gnu/perl5" \
+  "$R/usr/lib/gcc" \
+  "$R/usr/include" \
+  "$R/usr/src" \
+  "$R/usr/lib/systemd" \
+  "$R/usr/share/nodejs" \
+  "$R/usr/share/perl" \
+  "$R/usr/share/perl5" \
+  "$R/usr/share/pocketsphinx" \
+  "$R/usr/share/icons" \
+  "$R/usr/share/X11" \
+  "$R/usr/share/fonts" \
+  "$R/usr/share/gtk-3.0" \
+  "$R/usr/share/alsa" \
+  "$R/usr/share/mime" \
+  "$R/usr/share/info" \
+  "$R/usr/bin/aarch64-linux-gnu-"* \
+  "$R/usr/bin/"*gcc* "$R/usr/bin/"*g++* "$R/usr/bin/"*cpp* \
+  "$R/usr/bin/perl"* "$R/usr/bin/lto-dump"* \
+  "$R/usr/lib/python3.12/config-"* 2>/dev/null || true
+find "$R" -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+# Leftover proot-distro symlink-fixup files point at the host Termux prefix.
+rm -rf "$R/.l2s" 2>/dev/null || true
+find "$R" -type l -lname '/data/data/*' -delete 2>/dev/null || true
+
 mkdir -p "$STAGE/runtime/rootfs/usr/local/bin"
 
 cat > "$STAGE/runtime/rootfs/usr/local/bin/hermes-start.sh" <<'LAUNCHER'
@@ -74,9 +109,11 @@ if ! find "$STAGE/runtime/rootfs/usr/lib/python3"* "$STAGE/runtime/rootfs/usr/lo
 fi
 
 SIZE=$(du -sb "$STAGE/runtime" | cut -f1)
-# --dereference/--hard-dereference keep the archive to regular files and
-# directories, matching the minimal extractor in HermesTar.kt.
-tar --format=ustar --dereference --hard-dereference -czf "$BUNDLE" -C "$STAGE/runtime" .
+# Do NOT use --dereference: rootfs symlinks such as /usr/bin/X11 -> . recurse
+# forever. Symlinks are preserved and recreated safely by HermesTar.kt.
+# --hard-dereference turns hardlinks into regular files, which the extractor
+# already handles.
+tar --format=ustar --hard-dereference -czf "$BUNDLE" -C "$STAGE/runtime" .
 SHA=$(sha256sum "$BUNDLE" | cut -d' ' -f1)
 
 cat > "$OUT_DIR/runtime-manifest.json" <<MANIFEST

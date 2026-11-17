@@ -1,5 +1,6 @@
 package com.hermesagent.hermes_android
 
+import android.system.Os
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -65,8 +66,15 @@ object HermesTar {
                     if (executable) target.setExecutable(true, false)
                 }
                 '2' -> {
-                    // The bundle builder dereferences symlinks. Ignore any that
-                    // slip through rather than creating an unsafe link.
+                    // Recreate symlinks with a safe, root-relative target. The
+                    // builder must NOT dereference: rootfs links such as
+                    // /usr/bin/X11 -> . otherwise recurse forever.
+                    val linkName = parseString(header, 157, 100)
+                    HermesEngine.safeSymlinkTarget(root, target, linkName)?.let { safeTarget ->
+                        target.parentFile?.mkdirs()
+                        target.delete()
+                        Os.symlink(safeTarget, target.absolutePath)
+                    }
                 }
                 else -> {
                     val padding = (BLOCK - (size % BLOCK).toInt()) % BLOCK

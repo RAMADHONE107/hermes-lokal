@@ -112,7 +112,7 @@ class HermesEngineController private constructor(private val app: Application) {
                 staging.deleteRecursively()
                 HermesTar.extract(archive, staging) { extracted, _ ->
                     val percent = if (manifest.sizeBytes > 0) {
-                        ((extracted * 100) / (manifest.sizeBytes * 3)).toInt().coerceIn(0, 99)
+                        ((extracted * 100) / manifest.sizeBytes).toInt().coerceIn(0, 99)
                     } else -1
                     if (percent >= 0) {
                         update(Status(State.EXTRACTING, percent, "Mengekstrak runtime…", manifest.version))

@@ -45,18 +45,54 @@ object HermesEngine {
     }
 
     /** Reject tar entries that could escape the extraction root. */
-    fun isSafeEntry(name: String, linkTarget: String? = null): Boolean {
+    fun isSafeEntry(name: String): Boolean {
         if (name.isEmpty() || name.contains('\u0000')) return false
         if (name.startsWith("/") || name.startsWith("\\")) return false
         if (Regex("^[A-Za-z]:").containsMatchIn(name)) return false
         val segments = name.split('/')
         if (segments.any { it == ".." }) return false
-        if (linkTarget != null) {
-            if (linkTarget.isEmpty() || linkTarget.startsWith("/") || linkTarget.startsWith("\\")) return false
-            if (Regex("^[A-Za-z]:").containsMatchIn(linkTarget)) return false
-            if (linkTarget.split('/').any { it == ".." }) return false
-        }
         return true
+    }
+
+    /**
+     * Resolve a tar symlink target to a path relative to the link's parent.
+     * Absolute targets are interpreted inside the extracted root, matching
+     * proot's chroot. Targets that leave the root (or point at the host Termux
+     * prefix) are rejected. Null means the link must be skipped.
+     */
+    fun safeSymlinkTarget(root: File, link: File, raw: String): String? {
+        if (raw.isEmpty() || raw.contains('\u0000')) return null
+        if (raw.startsWith("/data/data/") || raw.startsWith("\\\\")) return null
+        if (Regex("^[A-Za-z]:").containsMatchIn(raw)) return null
+
+        val resolved = try {
+            if (raw.startsWith("/")) {
+                // Absolute targets are rootfs-absolute (the launcher chroots
+                // into <prefix>/rootfs), not prefix-absolute.
+                File(File(root, "rootfs"), raw.trimStart('/')).canonicalFile
+            } else {
+                File(link.parentFile, raw).canonicalFile
+            }
+        } catch (_: Exception) {
+            return null
+        }
+        val rootPath = root.canonicalFile.absolutePath
+        if (resolved.absolutePath != rootPath &&
+            !resolved.absolutePath.startsWith(rootPath + File.separator)
+        ) return null
+
+        return relativePath(link.parentFile?.canonicalFile ?: root.canonicalFile, resolved)
+    }
+
+    private fun relativePath(from: File, to: File): String {
+        val fromParts = from.absolutePath.split(File.separatorChar)
+        val toParts = to.absolutePath.split(File.separatorChar)
+        var common = 0
+        while (common < fromParts.size && common < toParts.size && fromParts[common] == toParts[common]) {
+            common++
+        }
+        val parts = List(fromParts.size - common) { ".." } + toParts.drop(common)
+        return if (parts.isEmpty()) "." else parts.joinToString(File.separator)
     }
 
     fun sha256Hex(file: File): String {

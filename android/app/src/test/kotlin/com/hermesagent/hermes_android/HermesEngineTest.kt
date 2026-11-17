@@ -42,7 +42,22 @@ class HermesEngineTest {
         assertFalse(HermesEngine.isSafeEntry("/absolute"))
         assertFalse(HermesEngine.isSafeEntry("runtime/../../evil"))
         assertTrue(HermesEngine.isSafeEntry("runtime/bin/proot"))
-        assertFalse(HermesEngine.isSafeEntry("link", "/etc/passwd"))
+    }
+
+    @Test
+    fun rewritesSymlinksInsideRoot() {
+        val root = File("/data/user/0/app/files/hermes-runtime")
+        val link = File(root, "rootfs/etc/alternatives/awk")
+        assertEquals(
+            "../../usr/bin/mawk",
+            HermesEngine.safeSymlinkTarget(root, link, "/usr/bin/mawk"),
+        )
+        assertEquals(
+            "../usr/bin/node",
+            HermesEngine.safeSymlinkTarget(root, link, "../usr/bin/node"),
+        )
+        assertEquals(null, HermesEngine.safeSymlinkTarget(root, link, "/../../outside"))
+        assertEquals(null, HermesEngine.safeSymlinkTarget(root, link, "/data/data/com.termux/files/usr/bin/python"))
     }
 
     @Test
