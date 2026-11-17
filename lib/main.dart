@@ -42,6 +42,7 @@ import 'core/utils/responsive.dart';
 import 'core/widgets/config_backup_card.dart';
 import 'core/widgets/theme_palette_picker.dart';
 import 'core/widgets/hermes_system_ui.dart';
+import 'local_app.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'package:hermes_android/core/l10n/l10n.dart';
@@ -54,9 +55,10 @@ import 'nextgen/theme/nextgen_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // Remove any private key left behind by a cancelled connection import.
-  unawaited(ClientCertificateService().cleanupStaging());
-  runApp(const StartupApp());
+  // The packaged app is Hermes Lokal only: a minimal UI wired straight to the
+  // embedded engine. The Ares widgets below stay in the tree for the existing
+  // test suite but are no longer the entry point.
+  runLocalHermesApp();
 }
 
 /// Draws a Flutter frame before reading preferences or Android Keystore.
